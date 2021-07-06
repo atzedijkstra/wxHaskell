@@ -7,7 +7,7 @@ import Data.List (foldl', intersperse, intercalate, nub, lookup, isPrefixOf, isI
 import Data.Maybe (fromJust)
 import Distribution.PackageDescription hiding (includeDirs)
 import qualified Distribution.PackageDescription as PD (includeDirs)
-import Distribution.InstalledPackageInfo(installedPackageId, sourcePackageId, includeDirs)
+import Distribution.InstalledPackageInfo(sourcePackageId, includeDirs)
 import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, installedPkgs, withPrograms, buildDir)
 import Distribution.Simple.PackageIndex(SearchResult (..), searchByName, allPackages )
@@ -39,21 +39,9 @@ wxcoreDirectoryQuoted  = "\"" ++ wxcoreDirectory ++ "\""
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
--- |This slightly dubious function obtains the install path for the wxc package we are using.
--- It works by finding the wxc package's installation info, then finding the include directory 
--- which contains wxc's headers (amongst the wxWidgets include dirs) and then going up a level.
--- It would be nice if the path was part of InstalledPackageInfo, but it isn't.
+--TODO don't hardcode this
 wxcInstallDir :: LocalBuildInfo -> IO FilePath
-wxcInstallDir lbi = 
-    case searchByName (installedPkgs lbi) "wxc" of
-        Unambiguous (wxc_pkg:_) -> do
-            wxc <- filterM (doesFileExist . (</> "wxc.h")) (includeDirs wxc_pkg)
-            case wxc of
-                [wxcIncludeDir] -> return (takeDirectory wxcIncludeDir)
-                [] -> error "wxcInstallDir: couldn't find wxc include dir"
-                _  -> error "wxcInstallDir: I'm confused. I see more than one wxc include directory from the same package"
-        Unambiguous [] -> error "wxcInstallDir: Cabal says wxc is installed but gives no package info for it"
-        _ -> error "wxcInstallDir: Couldn't find wxc package in installed packages"
+wxcInstallDir lbi = pure "/usr/include/wxc/"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
@@ -70,7 +58,7 @@ myConfHook (pkg0, pbi) flags = do
 
     lbi <- confHook simpleUserHooks (pkg0, pbi) flags
     wxcDirectory <- wxcInstallDir lbi
-    let wxcoreIncludeFile  = "\"" ++ wxcDirectory </> "include" </> "wxc.h\""
+    let wxcoreIncludeFile  = "\"" ++ wxcDirectory </> "wxc.h\""
     let wxcDirectoryQuoted = "\"" ++ wxcDirectory ++ "\""
     let system' command    = putStrLn command >> system command
 
@@ -91,7 +79,7 @@ myConfHook (pkg0, pbi) flags = do
     let libbi' = libbi
           { extraLibDirs   = extraLibDirs   libbi ++ [wxcDirectory]
           , extraLibs      = extraLibs      libbi ++ ["wxc"]
-          , PD.includeDirs = PD.includeDirs libbi ++ case glIncludeDirs of
+          , PD.includeDirs = PD.includeDirs libbi ++ [wxcDirectory] ++ case glIncludeDirs of
                                                          ('-':'I':v) -> [v];
                                                          _           -> []
           , ldOptions      = ldOptions      libbi ++ ["-Wl,-rpath," ++ wxcDirectory]  }
